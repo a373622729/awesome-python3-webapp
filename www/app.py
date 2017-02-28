@@ -1,12 +1,14 @@
 import logging;
 
-import asyncio, os, json, time
+import asyncio, os, json, time, hashlib
 import orm
 
 from datetime import datetime
 from aiohttp import web
 from jinja2 import Environment, FileSystemLoader
 from coroweb import add_routes, add_static
+from handlers import COOKIE_NAME, _COOKIE_KEY
+from modules import User
 
 logging.basicConfig(level=logging.INFO)
 
@@ -31,6 +33,50 @@ def init_jinja2(app, **kw):
         for name, f in filters.items():
             env.filters[name] = f
     app['__templating__'] = env
+
+
+"""
+对于每个URL处理函数，如果我们都去写解析cookie的代码，那么代码会重复很多
+利用middle在URL处理之前，把cookie解析出来，将登录用户绑定到request对象上
+"""
+def cookit2user(cookie_str):
+    if not cookie_str:
+        return None
+    try:
+        l = cookie_str.split('-')
+        if len(l) != 3:
+            return None
+        uid, expires, sha1 = l
+        if int(expires) < time.time():
+            #过期了
+            return None
+        user = yield from User.find(uid)
+        if user is None:
+            return None
+        s = '%s-%s-%s-%s' % (uid, user.passwd, expires, _COOKIE_KEY)
+        if sha1 != hashlib.sha1(s.encode()).hexdigest():
+            logging.info('invalid sha1')
+            return None
+        user.passwd = '******'
+        return user
+    except Exception as e:
+        logging.exception(e)
+        return None
+
+@asyncio.coroutine
+def auth_factory(app, handler):
+    @asyncio.coroutine
+    def auth(request):
+        logging.info('check user: %s %s' % (request.method, request.path))
+        request.__user__ = None
+        cookie_str = request.cookies.get(COOKIE_NAME)
+        if cookie_str:
+            user = yield from cookie2user(cookie_str)
+            if user:
+                logging.info('set current user: %s' % user.email)
+                request.__user__ = user
+        return (yield from handler(request))
+    return auth
 
 
 @asyncio.coroutine
@@ -118,7 +164,7 @@ def datetime_filter(t):
 @asyncio.coroutine
 def init(loop):
     yield from orm.create_pool(loop=loop, host='127.0.0.1', port=3306, user='www', password='www', db='awesome')
-    app = web.Application(loop=loop, middlewares=[logger_factory, response_factory])
+    app = web.Application(loop=loop, middlewares=[logger_factory, response_factory, auth_factory])
     init_jinja2(app, filters=dict(datetime=datetime_filter))
     add_routes(app, 'handlers')
     add_static(app)
