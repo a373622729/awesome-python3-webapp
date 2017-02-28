@@ -39,6 +39,8 @@ def init_jinja2(app, **kw):
 对于每个URL处理函数，如果我们都去写解析cookie的代码，那么代码会重复很多
 利用middle在URL处理之前，把cookie解析出来，将登录用户绑定到request对象上
 """
+
+
 def cookie2user(cookie_str):
     if not cookie_str:
         return None
@@ -48,7 +50,7 @@ def cookie2user(cookie_str):
             return None
         uid, expires, sha1 = l
         if int(expires) < time.time():
-            #过期了
+            # 过期了
             return None
         user = yield from User.find(uid)
         if user is None:
@@ -63,6 +65,7 @@ def cookie2user(cookie_str):
         logging.exception(e)
         return None
 
+
 @asyncio.coroutine
 def auth_factory(app, handler):
     @asyncio.coroutine
@@ -76,6 +79,7 @@ def auth_factory(app, handler):
                 logging.info('set current user: %s' % user.email)
                 request.__user__ = user
         return (yield from handler(request))
+
     return auth
 
 
@@ -85,6 +89,7 @@ def logger_factory(app, handler):
     def logger(request):
         logging.info('Request: %s %s' % (request.method, request.path))
         return (yield from handler(request))
+
     return logger
 
 
