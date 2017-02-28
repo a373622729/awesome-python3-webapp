@@ -39,7 +39,7 @@ def init_jinja2(app, **kw):
 对于每个URL处理函数，如果我们都去写解析cookie的代码，那么代码会重复很多
 利用middle在URL处理之前，把cookie解析出来，将登录用户绑定到request对象上
 """
-def cookit2user(cookie_str):
+def cookie2user(cookie_str):
     if not cookie_str:
         return None
     try:
