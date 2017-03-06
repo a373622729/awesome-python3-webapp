@@ -1,6 +1,5 @@
 import re, time, json, logging, hashlib, base64, asyncio
 
-
 from coroweb import get, post
 from models import User, Comment, Blog, next_id
 from apis import APIValueError, APIResourceNotFoundError, APIError
@@ -25,7 +24,7 @@ def index(request):
 
 
 @get('/api/users')
-def api_get_users(*,page='1'):
+def api_get_users(*, page='1'):
     """返回用户json"""
     # page_index = get_page_index(page)
     # num = yield from User.findNumber('count(id')
@@ -34,7 +33,7 @@ def api_get_users(*,page='1'):
     #     return dict(page=p, users=())
     users = yield from User.findAll(orderBy='created_at desc')
     for u in users:
-        u.passwd = '123456'
+        u.passwd = '******'
     return dict(users=users)
 
 
@@ -43,6 +42,7 @@ def register():
     return {
         '__template__': 'register.html'
     }
+
 
 _RE_EMAIL = re.compile(r'^[a-z0-9\.\-\_]+\@[a-z0-9\-\_]+(\.[a-z0-9\-\_]+){1,4}$')
 _RE_SHA1 = re.compile(r'^[0-9a-f]{40}$')
@@ -61,15 +61,15 @@ def api_register_user(*, email, name, passwd):
     users = yield from User.findAll('email=?', [email])
     if len(users) > 0:
         raise APIError('register:failed', 'email', 'Email is already in use')
-    uid = next_id
+    uid = next_id()
     sha1_passwd = '%s:%s' % (uid, passwd)
     user = User(id=uid, name=name.strip(), email=email, passwd=hashlib.sha1(sha1_passwd.encode('utf-8')).hexdigest(),
                 image='http://www.gravatar.com/avatar/%s?d=mm&s=120' % hashlib.md5(email.encode('utf-8')).hexdigest())
     yield from user.save()
-    #make session cookie:
+    # make session cookie:
     r = web.Response()
     r.set_cookie(COOKIE_NAME, user2cookie(user, 86400), max_age=86400, httponly=True)
-    users.passwd = '******'
+    user.passwd = '******'
     r.content_type = 'application/json'
     r.body = json.dumps(user, ensure_ascii=False).encode()
     return r
@@ -107,7 +107,8 @@ SHA1("用户id" + "用户口令" + "过期时间" + "SecretKey")
 这个算法的关键在于SHA1是一种单向算法，即可以通过原始字符串计算出SHA1结果，但无法通过SHA1结果反推出原始字符串。
 """
 
-#登录API
+
+# 登录API
 @post('/api/authenticate')
 def authenticate(*, email, passwd):
     if not email:
@@ -118,7 +119,7 @@ def authenticate(*, email, passwd):
     if len(users) == 0:
         raise APIValueError('email', 'Email not exist.')
     user = users[0]
-    #check passwd
+    # check passwd
     sha1 = hashlib.sha1()
     sha1.update(user.id.encode('utf-8'))
     sha1.update(b':')
@@ -134,10 +135,17 @@ def authenticate(*, email, passwd):
     return r
 
 
-#计算加密cookie
+# 计算加密cookie
 def user2cookie(user, max_age):
     """build cookie string by: id-expires-sha1"""
     expires = str(int(time.time() + max_age))
     s = '%s-%s-%s-%s' % (user.id, user.passwd, expires, _COOKIE_KEY)
     l = [user.id, expires, hashlib.sha1(s.encode()).hexdigest()]
     return '-'.join(l)
+
+
+@get('/signin')
+def signin():
+    return {
+        '__template__': 'signin.html'
+    }

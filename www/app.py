@@ -8,7 +8,7 @@ from aiohttp import web
 from jinja2 import Environment, FileSystemLoader
 from coroweb import add_routes, add_static
 from handlers import COOKIE_NAME, _COOKIE_KEY
-from modules import User
+from models import User
 
 logging.basicConfig(level=logging.INFO)
 
